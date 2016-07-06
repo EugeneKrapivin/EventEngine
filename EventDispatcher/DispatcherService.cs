@@ -84,28 +84,26 @@ namespace EventDispatcher
                     OriginalMessage = msg
                 };
 
-                if (cacheClient.Database.LockTake("InstanceListWriteLocks", instanceQueueKey, TimeSpan.FromSeconds(1)))
+
+                Metrics.GaugeDelta("instances.instance-list-write-locks", 1);
+                cacheClient.Database.ListLeftPush($"InstanceLists:{instanceQueueKey}",cacheClient.Serializer.Serialize(data));
+                Metrics.Counter("instances.events");
+
+                cacheClient.Database.LockRelease("InstanceListWriteLocks", instanceQueueKey);
+                Metrics.GaugeDelta("instances.instance-list-write-locks", -1);
+
+
+                if (cacheClient.Database.SetAdd($"TenantWorkSets:{tenantSetKey}", instanceQueueKey))
                 {
-                    Metrics.GaugeDelta("instances.instance-list-write-locks", 1);
-                    cacheClient.Database.ListLeftPush($"InstanceLists:{instanceQueueKey}",cacheClient.Serializer.Serialize(data));
-                    Metrics.Counter("instances.events");
-
-                    cacheClient.Database.LockRelease("InstanceListWriteLocks", instanceQueueKey);
-                    Metrics.GaugeDelta("instances.instance-list-write-locks", -1);
-
-
-                    if (cacheClient.Database.SetAdd($"TenantWorkSets:{tenantSetKey}", instanceQueueKey))
-                    {
-                        Metrics.GaugeDelta("instances", 1);
-                    }
-                    cacheClient.Database.SetAdd("WorkSet", tenantSetKey);
-
-                    Console.WriteLine($"Added to: {tenantSetKey}:{instanceQueueKey}");
-
-                    cacheClient.Database.Publish("WorkWorkWork", tenantSetKey);
-
-                    Thread.Sleep(10);
+                    Metrics.GaugeDelta("instances", 1);
                 }
+                cacheClient.Database.SetAdd("WorkSet", tenantSetKey);
+
+                Console.WriteLine($"Added to: {tenantSetKey}:{instanceQueueKey}");
+
+                cacheClient.Database.Publish("WorkWorkWork", tenantSetKey);
+
+                Thread.Sleep(10);
             }
         }
 
